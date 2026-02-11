@@ -21,6 +21,7 @@ Flags:
 ## Behavior
 
 - Passes webhook request to `go-telegram/bot` webhook handler.
+- Replies `OK` to incoming user messages.
 - Prints request details as JSON (2-space indentation) to stdout, including:
   - method / URI / protocol / remote address
   - all HTTP headers

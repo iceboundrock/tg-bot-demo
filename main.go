@@ -196,6 +196,12 @@ type fileTarget struct {
 }
 
 func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
+	if incoming := incomingUserMessageFromUpdate(update); shouldReplyOK(incoming) {
+		if _, err := b.SendMessage(ctx, buildOKReply(incoming)); err != nil {
+			log.Printf("reply failed: chat_id=%v message_id=%d err=%v", incoming.Chat.ID, incoming.ID, err)
+		}
+	}
+
 	message := messageFromUpdate(update)
 	if message == nil {
 		return
@@ -215,6 +221,48 @@ func handleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
 		}
 		log.Printf("downloaded: type=%s username=%s file_id=%s bytes=%d path=%s", target.Kind, username, target.FileID, size, outputPath)
 	}
+}
+
+func incomingUserMessageFromUpdate(update *models.Update) *models.Message {
+	switch {
+	case update.Message != nil:
+		return update.Message
+	case update.BusinessMessage != nil:
+		return update.BusinessMessage
+	default:
+		return nil
+	}
+}
+
+func shouldReplyOK(message *models.Message) bool {
+	if message == nil {
+		return false
+	}
+	if message.From != nil && message.From.IsBot {
+		return false
+	}
+	if message.Chat.ID == 0 {
+		return false
+	}
+	return true
+}
+
+func buildOKReply(message *models.Message) *bot.SendMessageParams {
+	params := &bot.SendMessageParams{
+		ChatID: message.Chat.ID,
+		Text:   "OK",
+		ReplyParameters: &models.ReplyParameters{
+			MessageID:                message.ID,
+			AllowSendingWithoutReply: true,
+		},
+	}
+	if message.MessageThreadID != 0 {
+		params.MessageThreadID = message.MessageThreadID
+	}
+	if message.DirectMessagesTopic != nil {
+		params.DirectMessagesTopicID = message.DirectMessagesTopic.TopicID
+	}
+	return params
 }
 
 func messageFromUpdate(update *models.Update) *models.Message {
