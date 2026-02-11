@@ -1,21 +1,31 @@
 # tg-bot-demo
 
 Simple Telegram Bot webhook debug server written in Go.
+Uses [`github.com/go-telegram/bot`](https://github.com/go-telegram/bot) to process webhook updates.
 
 ## Run
 
 ```bash
-go run . -listen ":8080" -path "/webhook" -status 200
+go run . -listen ":8080" -path "/webhook" -status 200 \
+  -token "123456:your-bot-token" \
+  -secret-token ""
 ```
 
 Flags:
 - `-listen`: HTTP listen address, default `:8080`
 - `-path`: webhook path, default `/webhook`
+- `-token`: Telegram bot token. Default reads `TELEGRAM_BOT_TOKEN`, fallback is a debug token.
+- `-secret-token`: optional secret token for `X-Telegram-Bot-Api-Secret-Token` validation.
 - `-status`: default response status code, default `200`
 
 ## Behavior
 
-- Prints all incoming request headers and body to stdout.
+- Passes webhook request to `go-telegram/bot` webhook handler.
+- Prints request details as JSON (2-space indentation) to stdout, including:
+  - method / URI / protocol / remote address
+  - all HTTP headers
+  - request body (auto-parsed as JSON when possible)
+  - response status code
 - Returns the configured status code.
 - You can override status per request via query parameter `status`.
 
