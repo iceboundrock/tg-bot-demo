@@ -6,13 +6,13 @@ Uses [`github.com/go-telegram/bot`](https://github.com/go-telegram/bot) to proce
 ## Run
 
 ```bash
-go run . -listen ":8080" -path "/webhook" -status 200 \
+go run . -listen ":3000" -path "/webhook" -status 200 \
   -token "123456:your-bot-token" \
   -secret-token ""
 ```
 
 Flags:
-- `-listen`: HTTP listen address, default `:8080`
+- `-listen`: HTTP listen address, default `:3000`
 - `-path`: webhook path, default `/webhook`
 - `-token`: Telegram bot token. Default reads `TELEGRAM_BOT_TOKEN`, fallback is a debug token.
 - `-secret-token`: optional secret token for `X-Telegram-Bot-Api-Secret-Token` validation.
@@ -26,6 +26,7 @@ Flags:
   - all HTTP headers
   - request body (auto-parsed as JSON when possible)
   - response status code
+- If update contains file media (document/photo/audio/video/voice/video_note/sticker/animation), downloads file to `download/{username}/{file_id}`.
 - Returns the configured status code.
 - You can override status per request via query parameter `status`.
 
@@ -33,12 +34,12 @@ Examples:
 
 ```bash
 # Use default status from -status
-curl -i -X POST "http://localhost:8080/webhook" \
+curl -i -X POST "http://localhost:3000/webhook" \
   -H "Content-Type: application/json" \
   -d '{"update_id":123}'
 
 # Override response status to 500 for retry testing
-curl -i -X POST "http://localhost:8080/webhook?status=500" \
+curl -i -X POST "http://localhost:3000/webhook?status=500" \
   -H "Content-Type: application/json" \
   -d '{"update_id":123}'
 ```
