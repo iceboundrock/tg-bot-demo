@@ -16,36 +16,116 @@ import (
 	"strings"
 	"time"
 
+	"tg-bot-demo/config"
+	"tg-bot-demo/handlers"
+	"tg-bot-demo/session"
+
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
 
-func main() {
-	defaultToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if defaultToken == "" {
-		defaultToken = "123456:debug-token"
+// initializeBot creates and configures a bot with session management
+func initializeBot(cfg *config.Config) (*bot.Bot, *session.SQLiteStore, error) {
+	// Initialize SQLite store with database path
+	store, err := session.NewSQLiteStore(cfg.DatabasePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create session store: %w", err)
 	}
 
-	listenAddr := flag.String("listen", ":3000", "HTTP listen address")
-	path := flag.String("path", "/webhook", "Webhook path")
-	token := flag.String("token", defaultToken, "Telegram bot token (or TELEGRAM_BOT_TOKEN env)")
-	secretToken := flag.String("secret-token", "", "Optional webhook secret token expected in X-Telegram-Bot-Api-Secret-Token")
-	defaultStatus := flag.Int("status", http.StatusOK, "Default HTTP status code returned to webhook requests")
-	flag.Parse()
+	// Create session manager with store
+	sessionMgr := session.NewManager(store)
 
-	if *defaultStatus < 100 || *defaultStatus > 599 {
-		log.Fatalf("invalid -status: %d, must be between 100 and 599", *defaultStatus)
+	// Create handler config
+	handlerCfg := &handlers.HandlerConfig{
+		SessionsPerPage: cfg.SessionsPerPage,
 	}
 
+	// Create bot with handlers
 	tgBot, err := bot.New(
-		*token,
+		cfg.Token,
 		bot.WithSkipGetMe(),
 		bot.WithDefaultHandler(handleUpdate),
-		bot.WithWebhookSecretToken(*secretToken),
+		bot.WithWebhookSecretToken(cfg.SecretToken),
 	)
 	if err != nil {
-		log.Fatalf("create telegram bot: %v", err)
+		store.Close()
+		return nil, nil, fmt.Errorf("failed to create telegram bot: %w", err)
 	}
+
+	// Register command handler for /sessions
+	tgBot.RegisterHandler(bot.HandlerTypeMessageText, "/sessions", bot.MatchTypeExact,
+		handlers.SessionsCommandHandler(sessionMgr, handlerCfg))
+
+	// Register callback query handler
+	tgBot.RegisterHandler(bot.HandlerTypeCallbackQueryData, "", bot.MatchTypePrefix,
+		handlers.CallbackQueryHandler(sessionMgr, handlerCfg))
+
+	// Register message handler for regular text messages (non-commands)
+	// This will handle messages that don't match other handlers
+	tgBot.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix,
+		handlers.MessageHandler(sessionMgr))
+
+	return tgBot, store, nil
+}
+
+func main() {
+	// Define command-line flags
+	configPath := flag.String("config", "", "Path to config file (optional)")
+	listenAddr := flag.String("listen", "", "HTTP listen address (overrides config)")
+	path := flag.String("path", "", "Webhook path (overrides config)")
+	token := flag.String("token", "", "Telegram bot token (overrides config)")
+	secretToken := flag.String("secret-token", "", "Webhook secret token (overrides config)")
+	defaultStatus := flag.Int("status", 0, "Default HTTP status code (overrides config)")
+	dbPath := flag.String("db", "", "Path to SQLite database file (overrides config)")
+	sessionsPerPage := flag.Int("sessions-per-page", 0, "Sessions per page (overrides config)")
+	flag.Parse()
+
+	// Load configuration
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("failed to load configuration: %v", err)
+	}
+
+	// Override config with command-line flags if provided
+	if *listenAddr != "" {
+		cfg.ListenAddr = *listenAddr
+	}
+	if *path != "" {
+		cfg.WebhookPath = *path
+	}
+	if *token != "" {
+		cfg.Token = *token
+	}
+	if *secretToken != "" {
+		cfg.SecretToken = *secretToken
+	}
+	if *defaultStatus != 0 {
+		cfg.DefaultStatus = *defaultStatus
+	}
+	if *dbPath != "" {
+		cfg.DatabasePath = *dbPath
+	}
+	if *sessionsPerPage != 0 {
+		cfg.SessionsPerPage = *sessionsPerPage
+	}
+
+	// Validate final configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
+	// Ensure database directory exists
+	dbDir := filepath.Dir(cfg.DatabasePath)
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		log.Fatalf("failed to create database directory: %v", err)
+	}
+
+	// Initialize bot with session management
+	tgBot, store, err := initializeBot(cfg)
+	if err != nil {
+		log.Fatalf("initialize bot: %v", err)
+	}
+	defer store.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -54,15 +134,16 @@ func main() {
 	tgWebhookHandler := tgBot.WebhookHandler()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc(*path, webhookHandler(tgWebhookHandler, *defaultStatus))
+	mux.HandleFunc(cfg.WebhookPath, webhookHandler(tgWebhookHandler, cfg.DefaultStatus))
 
 	server := &http.Server{
-		Addr:              *listenAddr,
+		Addr:              cfg.ListenAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("webhook server started: listen=%s path=%s default_status=%d", *listenAddr, *path, *defaultStatus)
+	log.Printf("webhook server started: listen=%s path=%s default_status=%d sessions_per_page=%d",
+		cfg.ListenAddr, cfg.WebhookPath, cfg.DefaultStatus, cfg.SessionsPerPage)
 	log.Fatal(server.ListenAndServe())
 }
 

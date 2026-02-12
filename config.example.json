@@ -1,0 +1,9 @@
+{
+  "token": "your-telegram-bot-token-here",
+  "secret_token": "optional-webhook-secret-token",
+  "listen_addr": ":3000",
+  "webhook_path": "/webhook",
+  "default_status": 200,
+  "sessions_per_page": 6,
+  "database_path": "./data/sessions.db"
+}

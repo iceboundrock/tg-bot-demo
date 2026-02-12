@@ -1,22 +1,101 @@
 # tg-bot-demo
 
-Simple Telegram Bot webhook debug server written in Go.
+Telegram Bot webhook server with session management, written in Go.
 Uses [`github.com/go-telegram/bot`](https://github.com/go-telegram/bot) to process webhook updates.
+
+## Features
+
+- **Session Management**: Create, list, and switch between conversation sessions
+- **Pagination**: Browse through sessions with inline keyboard pagination
+- **Flexible Configuration**: Support for config files, environment variables, and command-line flags
+- **SQLite Storage**: Persistent session storage with ACID guarantees
+- **File Downloads**: Automatic download of media files from messages
+
+## Quick Start
+
+```bash
+# Using environment variable for token
+export TELEGRAM_BOT_TOKEN="123456:your-bot-token"
+go run .
+
+# Or using command-line flags
+go run . -token "123456:your-bot-token" -listen ":3000"
+
+# Or using a config file
+go run . -config config.json
+```
+
+## Configuration
+
+The bot supports three configuration methods (in order of precedence):
+
+1. **Configuration file** (JSON format)
+2. **Environment variables**
+3. **Command-line flags**
+
+See [Configuration Guide](docs/configuration.md) for detailed documentation.
+
+### Quick Configuration Reference
+
+| Option | Env Variable | Flag | Default |
+|--------|-------------|------|---------|
+| Bot Token | `TELEGRAM_BOT_TOKEN` | `-token` | (required) |
+| Listen Address | `LISTEN_ADDR` | `-listen` | `:3000` |
+| Webhook Path | `WEBHOOK_PATH` | `-path` | `/webhook` |
+| Sessions Per Page | `SESSIONS_PER_PAGE` | `-sessions-per-page` | `6` |
+| Database Path | `DATABASE_PATH` | `-db` | `./data/sessions.db` |
+
+Example config file (`config.json`):
+
+```json
+{
+  "token": "123456:your-bot-token",
+  "listen_addr": ":3000",
+  "webhook_path": "/webhook",
+  "sessions_per_page": 6,
+  "database_path": "./data/sessions.db"
+}
+```
+
+## Session Management
+
+The bot provides session management features for organizing conversations:
+
+- **/sessions** - List your conversation sessions
+- Click a session to switch to it
+- Click "More..." to see additional sessions
+- New messages automatically create or use the active session
+
+See [Session Documentation](docs/sessions.md) for more details.
 
 ## Run
 
+### Basic Usage
+
 ```bash
-go run . -listen ":3000" -path "/webhook" -status 200 \
-  -token "123456:your-bot-token" \
-  -secret-token ""
+# Using environment variable
+export TELEGRAM_BOT_TOKEN="123456:your-bot-token"
+go run .
+
+# Using command-line flags
+go run . -token "123456:your-bot-token" -listen ":3000" -path "/webhook"
+
+# Using config file
+go run . -config config.json
 ```
 
-Flags:
-- `-listen`: HTTP listen address, default `:3000`
-- `-path`: webhook path, default `/webhook`
-- `-token`: Telegram bot token. Default reads `TELEGRAM_BOT_TOKEN`, fallback is a debug token.
-- `-secret-token`: optional secret token for `X-Telegram-Bot-Api-Secret-Token` validation.
-- `-status`: default response status code, default `200`
+### Command-Line Flags
+
+- `-config`: Path to JSON configuration file (optional)
+- `-listen`: HTTP listen address (default: `:3000`)
+- `-path`: Webhook path (default: `/webhook`)
+- `-token`: Telegram bot token (or set `TELEGRAM_BOT_TOKEN` env var)
+- `-secret-token`: Optional webhook secret token for validation
+- `-status`: Default HTTP response status code (default: `200`)
+- `-db`: Path to SQLite database file (default: `./data/sessions.db`)
+- `-sessions-per-page`: Number of sessions per page (default: `6`)
+
+Flags override config file values, and environment variables override both.
 
 ## Behavior
 
