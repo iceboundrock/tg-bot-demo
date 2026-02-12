@@ -56,6 +56,14 @@ func initializeBot(cfg *config.Config) (*bot.Bot, *session.SQLiteStore, error) {
 	tgBot.RegisterHandler(bot.HandlerTypeMessageText, "/sessions", bot.MatchTypeExact,
 		handlers.SessionsCommandHandler(sessionMgr, handlerCfg))
 
+	// Register command handler for /open
+	tgBot.RegisterHandler(bot.HandlerTypeMessageText, "/open", bot.MatchTypeExact,
+		handlers.OpenCommandHandler(sessionMgr))
+
+	// Register command handler for /close
+	tgBot.RegisterHandler(bot.HandlerTypeMessageText, "/close", bot.MatchTypeExact,
+		handlers.CloseCommandHandler(sessionMgr))
+
 	// Register callback query handler
 	tgBot.RegisterHandler(bot.HandlerTypeCallbackQueryData, "", bot.MatchTypePrefix,
 		handlers.CallbackQueryHandler(sessionMgr, handlerCfg))

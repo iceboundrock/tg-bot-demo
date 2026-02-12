@@ -62,6 +62,8 @@ Example config file (`config.json`):
 The bot provides session management features for organizing conversations:
 
 - **/sessions** - List your conversation sessions
+- **/open** - Open a new session and make it active
+- **/close** - Close the current active session (history is kept)
 - Click a session to switch to it
 - Click "More..." to see additional sessions
 - New messages automatically create or use the active session

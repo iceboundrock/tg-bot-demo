@@ -17,6 +17,69 @@ type HandlerConfig struct {
 	SessionsPerPage int
 }
 
+// OpenCommandHandler handles the /open command.
+// It creates and activates a new session.
+func OpenCommandHandler(sessionMgr *session.Manager) bot.HandlerFunc {
+	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
+		userID := update.Message.From.ID
+
+		LogInfo("open_command", userID, "user requested new session", nil)
+
+		sess, err := sessionMgr.CreateSession(ctx, userID, "")
+		if err != nil {
+			LogError("open_command", userID, err, nil)
+			SendErrorResponse(ctx, b, update.Message.Chat.ID, err)
+			return
+		}
+
+		LogInfo("open_command", userID, "new session opened", map[string]interface{}{
+			"session_id":    sess.ID.String(),
+			"session_title": sess.Title,
+		})
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   fmt.Sprintf("✅ Opened new session: %s", sess.Title),
+		})
+	}
+}
+
+// CloseCommandHandler handles the /close command.
+// It closes the currently active session binding for the user.
+func CloseCommandHandler(sessionMgr *session.Manager) bot.HandlerFunc {
+	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
+		userID := update.Message.From.ID
+
+		LogInfo("close_command", userID, "user requested close active session", nil)
+
+		sess, closed, err := sessionMgr.CloseActiveSession(ctx, userID)
+		if err != nil {
+			LogError("close_command", userID, err, nil)
+			SendErrorResponse(ctx, b, update.Message.Chat.ID, err)
+			return
+		}
+
+		if !closed {
+			LogInfo("close_command", userID, "no active session to close", nil)
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "No active session to close. Use /open to start one.",
+			})
+			return
+		}
+
+		LogInfo("close_command", userID, "active session closed", map[string]interface{}{
+			"session_id":    sess.ID.String(),
+			"session_title": sess.Title,
+		})
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   fmt.Sprintf("✅ Closed session: %s", sess.Title),
+		})
+	}
+}
+
 // SessionsCommandHandler handles the /sessions command
 func SessionsCommandHandler(sessionMgr *session.Manager, cfg *HandlerConfig) bot.HandlerFunc {
 	return func(ctx context.Context, b *bot.Bot, update *models.Update) {

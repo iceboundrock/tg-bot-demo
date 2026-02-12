@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -93,6 +94,9 @@ type Store interface {
 
 	// SetActiveSession sets the active session for a user
 	SetActiveSession(ctx context.Context, userID int64, sessionID uuid.UUID) error
+
+	// ClearActiveSession removes the active session binding for a user
+	ClearActiveSession(ctx context.Context, userID int64) error
 }
 
 // Error types
@@ -173,4 +177,22 @@ func (m *Manager) GetOrCreateActiveSession(ctx context.Context, userID int64, me
 
 	// No active session, create new one
 	return m.CreateSession(ctx, userID, message)
+}
+
+// CloseActiveSession removes the active session binding for a user.
+// It does not delete the session itself.
+func (m *Manager) CloseActiveSession(ctx context.Context, userID int64) (*Session, bool, error) {
+	activeSession, err := m.store.GetActiveSession(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrSessionNotFound) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("failed to get active session: %w", err)
+	}
+
+	if err := m.store.ClearActiveSession(ctx, userID); err != nil {
+		return nil, false, fmt.Errorf("failed to clear active session: %w", err)
+	}
+
+	return activeSession, true, nil
 }

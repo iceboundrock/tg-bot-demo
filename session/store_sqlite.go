@@ -299,3 +299,14 @@ func (s *SQLiteStore) SetActiveSession(ctx context.Context, userID int64, sessio
 
 	return nil
 }
+
+// ClearActiveSession removes the current active session for a user.
+func (s *SQLiteStore) ClearActiveSession(ctx context.Context, userID int64) error {
+	query := `DELETE FROM active_sessions WHERE user_id = ?`
+
+	if _, err := s.db.ExecContext(ctx, query, userID); err != nil {
+		return fmt.Errorf("failed to clear active session: %w", err)
+	}
+
+	return nil
+}

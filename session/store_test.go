@@ -245,6 +245,21 @@ func TestSQLiteStore_ActiveSession(t *testing.T) {
 	if active.ID != session2.ID {
 		t.Errorf("Expected active session ID %v, got %v", session2.ID, active.ID)
 	}
+
+	// Test ClearActiveSession
+	if err := store.ClearActiveSession(ctx, userID); err != nil {
+		t.Fatalf("Failed to clear active session: %v", err)
+	}
+
+	_, err = store.GetActiveSession(ctx, userID)
+	if err != ErrSessionNotFound {
+		t.Errorf("Expected ErrSessionNotFound after clear, got %v", err)
+	}
+
+	// Clearing again should be idempotent
+	if err := store.ClearActiveSession(ctx, userID); err != nil {
+		t.Fatalf("Second clear should not fail: %v", err)
+	}
 }
 
 func TestSQLiteStore_ErrorCases(t *testing.T) {
@@ -517,5 +532,57 @@ func TestManager_GetOrCreateActiveSession(t *testing.T) {
 
 	if session2.Title != "First message" {
 		t.Errorf("Expected title 'First message', got '%s'", session2.Title)
+	}
+}
+
+func TestManager_CloseActiveSession(t *testing.T) {
+	dbPath := "test_manager_close_active.db"
+	defer os.Remove(dbPath)
+
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	manager := NewManager(store)
+	ctx := context.Background()
+	userID := int64(123)
+
+	// No active session should return closed=false without error.
+	sess, closed, err := manager.CloseActiveSession(ctx, userID)
+	if err != nil {
+		t.Fatalf("CloseActiveSession failed: %v", err)
+	}
+	if closed {
+		t.Fatal("Expected closed=false when no active session exists")
+	}
+	if sess != nil {
+		t.Fatal("Expected session=nil when no active session exists")
+	}
+
+	// Create one active session and close it.
+	created, err := manager.CreateSession(ctx, userID, "Test message")
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	sess, closed, err = manager.CloseActiveSession(ctx, userID)
+	if err != nil {
+		t.Fatalf("CloseActiveSession failed: %v", err)
+	}
+	if !closed {
+		t.Fatal("Expected closed=true when active session exists")
+	}
+	if sess == nil {
+		t.Fatal("Expected closed session details")
+	}
+	if sess.ID != created.ID {
+		t.Fatalf("Expected closed session ID %v, got %v", created.ID, sess.ID)
+	}
+
+	_, err = store.GetActiveSession(ctx, userID)
+	if err != ErrSessionNotFound {
+		t.Fatalf("Expected no active session after close, got %v", err)
 	}
 }
