@@ -104,7 +104,7 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
 [ 会话1 ]  
 [ 会话2 ]  
 ...  
-[ 更多... ]  
+[ Prev ] [ Next ]  
 ---
 
 ### **5.2 👉 Inline Keyboard 格式（分页）**
@@ -121,7 +121,8 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
         { "text": "写影视剧推荐", "callback_data": "open_s_uuid1" }  
       ],  
       [  
-        { "text": "更多会话...", "callback_data": "more_sessions_10" }  
+        { "text": "Prev", "callback_data": "page_sessions_0" },
+        { "text": "Next", "callback_data": "page_sessions_12" }  
       ]  
     ]  
   }  
@@ -140,13 +141,15 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
 
 * 每页显示最多 N=6 个
 
-* 超过 6 个显示“更多”按钮
+* 如果有上一页，显示 `Prev` 按钮
 
-* “更多”按钮发送 callback_data：
+* 如果有下一页，显示 `Next` 按钮
 
-more_sessions_<offset>
+* 分页按钮发送 callback_data：
 
-Bot 解析后 fetch 下一页列表
+page_sessions_<offset>
+
+Bot 解析后加载目标 offset 对应页
 
 ---
 
@@ -169,15 +172,15 @@ if startsWith(data, "open_s_"):
 
 收到：
 
-CallbackQuery{ data: "more_sessions_10" }
+CallbackQuery{ data: "page_sessions_6" }
 
 逻辑：
 
-1. 解析 offset=10
+1. 解析 offset=6
 
-2. 查询下一页 limit=6
+2. 查询该页 limit=6，并计算是否有上一页/下一页
 
-3. 编辑当前消息或发送新消息显示下一页按钮
+3. 编辑当前消息按钮区，按需显示 `Prev`/`Next`
 
 可采用 bot.editMessageReplyMarkup 更新按钮
 
@@ -247,7 +250,7 @@ Bot: sendMessage → Inline Keyboard List (SessionL1)
 
 User clicks → CallbackQuery  
  ├ "open_s_xxx" → open that session  
- └ "more_sessions_offset" → paginate
+ └ "page_sessions_offset" → paginate
 
 optional:  
 Bot sends button:  
@@ -298,7 +301,7 @@ User clicks → opens Web App UI
   "inline_keyboard": [  
     [ { "text": "写影视剧推荐", "callback_data": "open_s_uuid1" } ],  
     [ { "text": "学习总结", "callback_data": "open_s_uuid2" } ],  
-    [ { "text": "更多会话...", "callback_data": "more_sessions_12" } ],  
+    [ { "text": "Prev", "callback_data": "page_sessions_0" }, { "text": "Next", "callback_data": "page_sessions_12" } ],  
     [ { "text": "打开完整列表", "web_app": { "url": "https://yourdomain.com/sessions?userId=xxx" } } ]  
   ]  
 }  

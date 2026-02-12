@@ -65,7 +65,7 @@ The bot provides session management features for organizing conversations:
 - **/open** - Open a new session and make it active
 - **/close** - Close the current active session (history is kept)
 - Click a session to switch to it
-- Click "More..." to see additional sessions
+- Use "Prev"/"Next" buttons to navigate pages
 - New messages automatically create or use the active session
 
 See [Session Documentation](docs/sessions.md) for more details.

@@ -88,7 +88,7 @@ func SessionsCommandHandler(sessionMgr *session.Manager, cfg *HandlerConfig) bot
 		LogInfo("sessions_command", userID, "user requested session list", nil)
 
 		// Get first page of sessions
-		sessions, hasMore, err := sessionMgr.ListSessions(ctx, userID, 0, cfg.SessionsPerPage)
+		sessions, hasNext, err := sessionMgr.ListSessions(ctx, userID, 0, cfg.SessionsPerPage)
 		if err != nil {
 			LogError("sessions_command", userID, err, map[string]interface{}{
 				"offset": 0,
@@ -109,11 +109,12 @@ func SessionsCommandHandler(sessionMgr *session.Manager, cfg *HandlerConfig) bot
 		}
 
 		// Build inline keyboard
-		keyboard := buildSessionKeyboard(sessions, 0, hasMore, cfg.SessionsPerPage)
+		keyboard := buildSessionKeyboard(sessions, 0, false, hasNext, cfg.SessionsPerPage)
 
 		LogInfo("sessions_command", userID, "session list sent", map[string]interface{}{
 			"session_count": len(sessions),
-			"has_more":      hasMore,
+			"has_prev":      false,
+			"has_next":      hasNext,
 		})
 
 		b.SendMessage(ctx, &bot.SendMessageParams{
@@ -139,8 +140,8 @@ func CallbackQueryHandler(sessionMgr *session.Manager, cfg *HandlerConfig) bot.H
 		// Route based on callback data prefix
 		if len(data) >= 7 && data[:7] == "open_s_" {
 			handleOpenSession(ctx, b, callback, sessionMgr, userID, data)
-		} else if len(data) >= 14 && data[:14] == "more_sessions_" {
-			handleMoreSessions(ctx, b, callback, sessionMgr, userID, data, cfg.SessionsPerPage)
+		} else if len(data) >= 14 && data[:14] == "page_sessions_" {
+			handlePageSessions(ctx, b, callback, sessionMgr, userID, data, cfg.SessionsPerPage)
 		} else {
 			// Invalid callback data, log warning
 			LogWarning("callback_query", userID, "invalid callback data format", map[string]interface{}{

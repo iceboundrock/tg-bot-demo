@@ -45,7 +45,7 @@ func truncate(s string, maxLen int) string {
 }
 
 // buildSessionKeyboard creates an inline keyboard for session list
-func buildSessionKeyboard(sessions []*session.Session, offset int, hasMore bool, sessionsPerPage int) *models.InlineKeyboardMarkup {
+func buildSessionKeyboard(sessions []*session.Session, offset int, hasPrev bool, hasNext bool, sessionsPerPage int) *models.InlineKeyboardMarkup {
 	var rows [][]models.InlineKeyboardButton
 
 	// Add session buttons (one per row)
@@ -57,13 +57,29 @@ func buildSessionKeyboard(sessions []*session.Session, offset int, hasMore bool,
 		rows = append(rows, []models.InlineKeyboardButton{button})
 	}
 
-	// Add "More" button if needed
-	if hasMore {
-		moreButton := models.InlineKeyboardButton{
-			Text:         "📄 More...",
-			CallbackData: fmt.Sprintf("more_sessions_%d", offset+sessionsPerPage),
+	// Add pagination row when there is previous/next page.
+	if hasPrev || hasNext {
+		var navRow []models.InlineKeyboardButton
+
+		if hasPrev {
+			prevOffset := offset - sessionsPerPage
+			if prevOffset < 0 {
+				prevOffset = 0
+			}
+			navRow = append(navRow, models.InlineKeyboardButton{
+				Text:         "Prev",
+				CallbackData: fmt.Sprintf("page_sessions_%d", prevOffset),
+			})
 		}
-		rows = append(rows, []models.InlineKeyboardButton{moreButton})
+
+		if hasNext {
+			navRow = append(navRow, models.InlineKeyboardButton{
+				Text:         "Next",
+				CallbackData: fmt.Sprintf("page_sessions_%d", offset+sessionsPerPage),
+			})
+		}
+
+		rows = append(rows, navRow)
 	}
 
 	return &models.InlineKeyboardMarkup{
@@ -135,8 +151,8 @@ func handleOpenSession(ctx context.Context, b *bot.Bot, callback *models.Callbac
 	})
 }
 
-// handleMoreSessions processes pagination requests
-func handleMoreSessions(ctx context.Context, b *bot.Bot, callback *models.CallbackQuery,
+// handlePageSessions processes pagination requests.
+func handlePageSessions(ctx context.Context, b *bot.Bot, callback *models.CallbackQuery,
 	sessionMgr *session.Manager, userID int64, data string, sessionsPerPage int) {
 	// Get the message from callback
 	msg := callback.Message.Message
@@ -145,39 +161,56 @@ func handleMoreSessions(ctx context.Context, b *bot.Bot, callback *models.Callba
 	}
 
 	// Parse offset
-	offsetStr := data[14:] // Skip "more_sessions_" prefix
+	if len(data) < 14 || data[:14] != "page_sessions_" {
+		LogWarning("page_sessions", userID, "invalid callback data prefix", map[string]interface{}{
+			"callback_data": data,
+		})
+		return
+	}
+	offsetStr := data[14:]
+
 	offset, err := strconv.Atoi(offsetStr)
 	if err != nil {
-		LogWarning("more_sessions", userID, "invalid offset format", map[string]interface{}{
+		LogWarning("page_sessions", userID, "invalid offset format", map[string]interface{}{
 			"offset_str": offsetStr,
 			"error":      err.Error(),
 		})
 		return
 	}
 
-	LogDebug("more_sessions", userID, "loading next page", map[string]interface{}{
+	if offset < 0 {
+		LogWarning("page_sessions", userID, "negative offset", map[string]interface{}{
+			"offset": offset,
+		})
+		return
+	}
+
+	LogDebug("page_sessions", userID, "loading page", map[string]interface{}{
 		"offset": offset,
 		"limit":  sessionsPerPage,
 	})
 
-	// Get next page
-	sessions, hasMore, err := sessionMgr.ListSessions(ctx, userID, offset, sessionsPerPage)
+	// Get page
+	sessions, hasNext, err := sessionMgr.ListSessions(ctx, userID, offset, sessionsPerPage)
 	if err != nil {
-		LogError("more_sessions", userID, err, map[string]interface{}{
+		LogError("page_sessions", userID, err, map[string]interface{}{
 			"offset": offset,
 			"limit":  sessionsPerPage,
 		})
 		return
 	}
 
-	LogInfo("more_sessions", userID, "pagination successful", map[string]interface{}{
+	hasPrev := offset > 0
+
+	LogInfo("page_sessions", userID, "pagination successful", map[string]interface{}{
 		"offset":        offset,
 		"session_count": len(sessions),
-		"has_more":      hasMore,
+		"has_prev":      hasPrev,
+		"has_next":      hasNext,
 	})
 
 	// Update message with new keyboard
-	keyboard := buildSessionKeyboard(sessions, offset, hasMore, sessionsPerPage)
+	keyboard := buildSessionKeyboard(sessions, offset, hasPrev, hasNext, sessionsPerPage)
 
 	b.EditMessageReplyMarkup(ctx, &bot.EditMessageReplyMarkupParams{
 		ChatID:      msg.Chat.ID,

@@ -12,15 +12,16 @@ func TestBuildSessionKeyboard(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name            string
-		sessions        []*session.Session
-		offset          int
-		hasMore         bool
-		expectedRows    int
-		expectedMoreBtn bool
+		name               string
+		sessions           []*session.Session
+		offset             int
+		hasPrev            bool
+		hasNext            bool
+		expectedRows       int
+		expectedNavButtons []string
 	}{
 		{
-			name: "single session without more button",
+			name: "single session without pagination",
 			sessions: []*session.Session{
 				{
 					ID:          uuid.New(),
@@ -31,48 +32,75 @@ func TestBuildSessionKeyboard(t *testing.T) {
 					LastMessage: "Hello",
 				},
 			},
-			offset:          0,
-			hasMore:         false,
-			expectedRows:    1,
-			expectedMoreBtn: false,
+			offset:             0,
+			hasPrev:            false,
+			hasNext:            false,
+			expectedRows:       1,
+			expectedNavButtons: nil,
 		},
 		{
-			name: "multiple sessions without more button",
+			name: "multiple sessions without pagination",
 			sessions: []*session.Session{
 				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 3", UpdatedAt: now, CreatedAt: now, LastMessage: "Hey"},
 			},
-			offset:          0,
-			hasMore:         false,
-			expectedRows:    3,
-			expectedMoreBtn: false,
+			offset:             0,
+			hasPrev:            false,
+			hasNext:            false,
+			expectedRows:       3,
+			expectedNavButtons: nil,
 		},
 		{
-			name: "sessions with more button",
+			name: "sessions with next button only",
 			sessions: []*session.Session{
 				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 3", UpdatedAt: now, CreatedAt: now, LastMessage: "Hey"},
 			},
-			offset:          0,
-			hasMore:         true,
-			expectedRows:    4, // 3 sessions + 1 more button
-			expectedMoreBtn: true,
+			offset:             0,
+			hasPrev:            false,
+			hasNext:            true,
+			expectedRows:       4, // 3 sessions + 1 navigation row
+			expectedNavButtons: []string{"Next"},
 		},
 		{
-			name:            "empty sessions",
-			sessions:        []*session.Session{},
-			offset:          0,
-			hasMore:         false,
-			expectedRows:    0,
-			expectedMoreBtn: false,
+			name: "sessions with prev and next buttons",
+			sessions: []*session.Session{
+				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
+				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
+			},
+			offset:             6,
+			hasPrev:            true,
+			hasNext:            true,
+			expectedRows:       3, // 2 sessions + 1 navigation row
+			expectedNavButtons: []string{"Prev", "Next"},
+		},
+		{
+			name: "sessions with prev button only",
+			sessions: []*session.Session{
+				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
+			},
+			offset:             6,
+			hasPrev:            true,
+			hasNext:            false,
+			expectedRows:       2, // 1 session + 1 navigation row
+			expectedNavButtons: []string{"Prev"},
+		},
+		{
+			name:               "empty sessions",
+			sessions:           []*session.Session{},
+			offset:             0,
+			hasPrev:            false,
+			hasNext:            false,
+			expectedRows:       0,
+			expectedNavButtons: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			keyboard := buildSessionKeyboard(tt.sessions, tt.offset, tt.hasMore, 6)
+			keyboard := buildSessionKeyboard(tt.sessions, tt.offset, tt.hasPrev, tt.hasNext, 6)
 
 			if keyboard == nil {
 				t.Fatal("keyboard is nil")
@@ -82,14 +110,16 @@ func TestBuildSessionKeyboard(t *testing.T) {
 				t.Errorf("expected %d rows, got %d", tt.expectedRows, len(keyboard.InlineKeyboard))
 			}
 
-			// Check if more button exists when expected
-			if tt.expectedMoreBtn {
+			if len(tt.expectedNavButtons) > 0 {
 				lastRow := keyboard.InlineKeyboard[len(keyboard.InlineKeyboard)-1]
-				if len(lastRow) != 1 {
-					t.Errorf("expected 1 button in last row, got %d", len(lastRow))
+				if len(lastRow) != len(tt.expectedNavButtons) {
+					t.Errorf("expected %d buttons in last row, got %d", len(tt.expectedNavButtons), len(lastRow))
 				}
-				if lastRow[0].Text != "📄 More..." {
-					t.Errorf("expected more button text '📄 More...', got %q", lastRow[0].Text)
+
+				for i, expectedText := range tt.expectedNavButtons {
+					if lastRow[i].Text != expectedText {
+						t.Errorf("expected nav button %d text %q, got %q", i, expectedText, lastRow[i].Text)
+					}
 				}
 			}
 		})
@@ -112,7 +142,7 @@ func TestBuildSessionKeyboardCallbackData(t *testing.T) {
 	}
 
 	t.Run("session button callback format", func(t *testing.T) {
-		keyboard := buildSessionKeyboard(sessions, 0, false, 6)
+		keyboard := buildSessionKeyboard(sessions, 0, false, false, 6)
 
 		if len(keyboard.InlineKeyboard) != 1 {
 			t.Fatalf("expected 1 row, got %d", len(keyboard.InlineKeyboard))
@@ -126,19 +156,40 @@ func TestBuildSessionKeyboardCallbackData(t *testing.T) {
 		}
 	})
 
-	t.Run("more button callback format", func(t *testing.T) {
+	t.Run("next button callback format", func(t *testing.T) {
 		offset := 6
-		keyboard := buildSessionKeyboard(sessions, offset, true, 6)
+		keyboard := buildSessionKeyboard(sessions, offset, false, true, 6)
 
 		if len(keyboard.InlineKeyboard) != 2 {
 			t.Fatalf("expected 2 rows, got %d", len(keyboard.InlineKeyboard))
 		}
 
-		moreButton := keyboard.InlineKeyboard[1][0]
-		expectedCallback := "more_sessions_12" // offset + SessionsPerPage = 6 + 6 = 12
+		nextButton := keyboard.InlineKeyboard[1][0]
+		expectedCallback := "page_sessions_12" // offset + SessionsPerPage = 6 + 6 = 12
 
-		if moreButton.CallbackData != expectedCallback {
-			t.Errorf("expected callback_data %q, got %q", expectedCallback, moreButton.CallbackData)
+		if nextButton.CallbackData != expectedCallback {
+			t.Errorf("expected callback_data %q, got %q", expectedCallback, nextButton.CallbackData)
+		}
+	})
+
+	t.Run("prev and next callback format", func(t *testing.T) {
+		offset := 6
+		keyboard := buildSessionKeyboard(sessions, offset, true, true, 6)
+
+		if len(keyboard.InlineKeyboard) != 2 {
+			t.Fatalf("expected 2 rows, got %d", len(keyboard.InlineKeyboard))
+		}
+
+		navRow := keyboard.InlineKeyboard[1]
+		if len(navRow) != 2 {
+			t.Fatalf("expected 2 nav buttons, got %d", len(navRow))
+		}
+
+		if navRow[0].CallbackData != "page_sessions_0" {
+			t.Errorf("expected prev callback_data %q, got %q", "page_sessions_0", navRow[0].CallbackData)
+		}
+		if navRow[1].CallbackData != "page_sessions_12" {
+			t.Errorf("expected next callback_data %q, got %q", "page_sessions_12", navRow[1].CallbackData)
 		}
 	})
 }
