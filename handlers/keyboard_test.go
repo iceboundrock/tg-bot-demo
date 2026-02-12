@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 	"tg-bot-demo/session"
 	"time"
@@ -12,13 +13,14 @@ func TestBuildSessionKeyboard(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name               string
-		sessions           []*session.Session
-		offset             int
-		hasPrev            bool
-		hasNext            bool
-		expectedRows       int
-		expectedNavButtons []string
+		name              string
+		sessions          []*session.Session
+		offset            int
+		hasPrev           bool
+		hasNext           bool
+		expectedRows      int
+		expectedTopNav    string
+		expectedBottomNav string
 	}{
 		{
 			name: "single session without pagination",
@@ -32,11 +34,12 @@ func TestBuildSessionKeyboard(t *testing.T) {
 					LastMessage: "Hello",
 				},
 			},
-			offset:             0,
-			hasPrev:            false,
-			hasNext:            false,
-			expectedRows:       1,
-			expectedNavButtons: nil,
+			offset:            0,
+			hasPrev:           false,
+			hasNext:           false,
+			expectedRows:      1,
+			expectedTopNav:    "",
+			expectedBottomNav: "",
 		},
 		{
 			name: "multiple sessions without pagination",
@@ -45,11 +48,12 @@ func TestBuildSessionKeyboard(t *testing.T) {
 				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 3", UpdatedAt: now, CreatedAt: now, LastMessage: "Hey"},
 			},
-			offset:             0,
-			hasPrev:            false,
-			hasNext:            false,
-			expectedRows:       3,
-			expectedNavButtons: nil,
+			offset:            0,
+			hasPrev:           false,
+			hasNext:           false,
+			expectedRows:      3,
+			expectedTopNav:    "",
+			expectedBottomNav: "",
 		},
 		{
 			name: "sessions with next button only",
@@ -58,11 +62,12 @@ func TestBuildSessionKeyboard(t *testing.T) {
 				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 3", UpdatedAt: now, CreatedAt: now, LastMessage: "Hey"},
 			},
-			offset:             0,
-			hasPrev:            false,
-			hasNext:            true,
-			expectedRows:       4, // 3 sessions + 1 navigation row
-			expectedNavButtons: []string{"Next"},
+			offset:            0,
+			hasPrev:           false,
+			hasNext:           true,
+			expectedRows:      4, // 3 sessions + bottom nav row
+			expectedTopNav:    "",
+			expectedBottomNav: nextPageButtonText,
 		},
 		{
 			name: "sessions with prev and next buttons",
@@ -70,31 +75,34 @@ func TestBuildSessionKeyboard(t *testing.T) {
 				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
 				{ID: uuid.New(), UserID: 123, Title: "Session 2", UpdatedAt: now, CreatedAt: now, LastMessage: "Hello"},
 			},
-			offset:             6,
-			hasPrev:            true,
-			hasNext:            true,
-			expectedRows:       3, // 2 sessions + 1 navigation row
-			expectedNavButtons: []string{"Prev", "Next"},
+			offset:            6,
+			hasPrev:           true,
+			hasNext:           true,
+			expectedRows:      4, // top nav + 2 sessions + bottom nav
+			expectedTopNav:    prevPageButtonText,
+			expectedBottomNav: nextPageButtonText,
 		},
 		{
 			name: "sessions with prev button only",
 			sessions: []*session.Session{
 				{ID: uuid.New(), UserID: 123, Title: "Session 1", UpdatedAt: now, CreatedAt: now, LastMessage: "Hi"},
 			},
-			offset:             6,
-			hasPrev:            true,
-			hasNext:            false,
-			expectedRows:       2, // 1 session + 1 navigation row
-			expectedNavButtons: []string{"Prev"},
+			offset:            6,
+			hasPrev:           true,
+			hasNext:           false,
+			expectedRows:      2, // top nav + 1 session
+			expectedTopNav:    prevPageButtonText,
+			expectedBottomNav: "",
 		},
 		{
-			name:               "empty sessions",
-			sessions:           []*session.Session{},
-			offset:             0,
-			hasPrev:            false,
-			hasNext:            false,
-			expectedRows:       0,
-			expectedNavButtons: nil,
+			name:              "empty sessions with both nav buttons",
+			sessions:          []*session.Session{},
+			offset:            6,
+			hasPrev:           true,
+			hasNext:           true,
+			expectedRows:      2,
+			expectedTopNav:    prevPageButtonText,
+			expectedBottomNav: nextPageButtonText,
 		},
 	}
 
@@ -110,16 +118,34 @@ func TestBuildSessionKeyboard(t *testing.T) {
 				t.Errorf("expected %d rows, got %d", tt.expectedRows, len(keyboard.InlineKeyboard))
 			}
 
-			if len(tt.expectedNavButtons) > 0 {
-				lastRow := keyboard.InlineKeyboard[len(keyboard.InlineKeyboard)-1]
-				if len(lastRow) != len(tt.expectedNavButtons) {
-					t.Errorf("expected %d buttons in last row, got %d", len(tt.expectedNavButtons), len(lastRow))
+			if tt.expectedTopNav != "" {
+				topRow := keyboard.InlineKeyboard[0]
+				if len(topRow) != 1 {
+					t.Fatalf("expected 1 button in top row, got %d", len(topRow))
 				}
+				if topRow[0].Text != tt.expectedTopNav {
+					t.Errorf("expected top nav %q, got %q", tt.expectedTopNav, topRow[0].Text)
+				}
+			}
 
-				for i, expectedText := range tt.expectedNavButtons {
-					if lastRow[i].Text != expectedText {
-						t.Errorf("expected nav button %d text %q, got %q", i, expectedText, lastRow[i].Text)
-					}
+			if tt.expectedBottomNav != "" {
+				lastRow := keyboard.InlineKeyboard[len(keyboard.InlineKeyboard)-1]
+				if len(lastRow) != 1 {
+					t.Fatalf("expected 1 button in bottom row, got %d", len(lastRow))
+				}
+				if lastRow[0].Text != tt.expectedBottomNav {
+					t.Errorf("expected bottom nav %q, got %q", tt.expectedBottomNav, lastRow[0].Text)
+				}
+			}
+
+			if len(tt.sessions) > 0 {
+				sessionRowIndex := 0
+				if tt.hasPrev {
+					sessionRowIndex = 1
+				}
+				firstSessionBtn := keyboard.InlineKeyboard[sessionRowIndex][0]
+				if !strings.HasPrefix(firstSessionBtn.CallbackData, "open_s_") {
+					t.Errorf("expected first session row callback to start with open_s_, got %q", firstSessionBtn.CallbackData)
 				}
 			}
 		})
@@ -170,26 +196,41 @@ func TestBuildSessionKeyboardCallbackData(t *testing.T) {
 		if nextButton.CallbackData != expectedCallback {
 			t.Errorf("expected callback_data %q, got %q", expectedCallback, nextButton.CallbackData)
 		}
+		if nextButton.Text != nextPageButtonText {
+			t.Errorf("expected button text %q, got %q", nextPageButtonText, nextButton.Text)
+		}
 	})
 
 	t.Run("prev and next callback format", func(t *testing.T) {
 		offset := 6
 		keyboard := buildSessionKeyboard(sessions, offset, true, true, 6)
 
-		if len(keyboard.InlineKeyboard) != 2 {
-			t.Fatalf("expected 2 rows, got %d", len(keyboard.InlineKeyboard))
+		if len(keyboard.InlineKeyboard) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(keyboard.InlineKeyboard))
 		}
 
-		navRow := keyboard.InlineKeyboard[1]
-		if len(navRow) != 2 {
-			t.Fatalf("expected 2 nav buttons, got %d", len(navRow))
+		prevRow := keyboard.InlineKeyboard[0]
+		if len(prevRow) != 1 {
+			t.Fatalf("expected 1 prev button, got %d", len(prevRow))
 		}
 
-		if navRow[0].CallbackData != "page_sessions_0" {
-			t.Errorf("expected prev callback_data %q, got %q", "page_sessions_0", navRow[0].CallbackData)
+		if prevRow[0].CallbackData != "page_sessions_0" {
+			t.Errorf("expected prev callback_data %q, got %q", "page_sessions_0", prevRow[0].CallbackData)
 		}
-		if navRow[1].CallbackData != "page_sessions_12" {
-			t.Errorf("expected next callback_data %q, got %q", "page_sessions_12", navRow[1].CallbackData)
+		if prevRow[0].Text != prevPageButtonText {
+			t.Errorf("expected prev button text %q, got %q", prevPageButtonText, prevRow[0].Text)
+		}
+
+		nextRow := keyboard.InlineKeyboard[2]
+		if len(nextRow) != 1 {
+			t.Fatalf("expected 1 next button, got %d", len(nextRow))
+		}
+
+		if nextRow[0].CallbackData != "page_sessions_12" {
+			t.Errorf("expected next callback_data %q, got %q", "page_sessions_12", nextRow[0].CallbackData)
+		}
+		if nextRow[0].Text != nextPageButtonText {
+			t.Errorf("expected next button text %q, got %q", nextPageButtonText, nextRow[0].Text)
 		}
 	})
 }

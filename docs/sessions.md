@@ -101,10 +101,11 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
 
 附带按钮：
 
+[ ↑ 𝐏𝐫𝐞𝐯 ]  
 [ 会话1 ]  
 [ 会话2 ]  
 ...  
-[ Prev ] [ Next ]  
+[ ↓ 𝐍𝐞𝐱𝐭 ]  
 ---
 
 ### **5.2 👉 Inline Keyboard 格式（分页）**
@@ -117,12 +118,14 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
   "text": "请选择会话👇",  
   "reply_markup": {  
     "inline_keyboard": [  
+      [
+        { "text": "↑ 𝐏𝐫𝐞𝐯", "callback_data": "page_sessions_0" }
+      ],
       [  
         { "text": "写影视剧推荐", "callback_data": "open_s_uuid1" }  
       ],  
       [  
-        { "text": "Prev", "callback_data": "page_sessions_0" },
-        { "text": "Next", "callback_data": "page_sessions_12" }  
+        { "text": "↓ 𝐍𝐞𝐱𝐭", "callback_data": "page_sessions_12" }  
       ]  
     ]  
   }  
@@ -141,9 +144,9 @@ GET /api/sessions?userId=<userId>\&offset=<offset>\&limit=<limit>
 
 * 每页显示最多 N=6 个
 
-* 如果有上一页，显示 `Prev` 按钮
+* 如果有上一页，在列表顶部显示 `↑ 𝐏𝐫𝐞𝐯` 按钮
 
-* 如果有下一页，显示 `Next` 按钮
+* 如果有下一页，在列表底部显示 `↓ 𝐍𝐞𝐱𝐭` 按钮
 
 * 分页按钮发送 callback_data：
 
@@ -180,7 +183,7 @@ CallbackQuery{ data: "page_sessions_6" }
 
 2. 查询该页 limit=6，并计算是否有上一页/下一页
 
-3. 编辑当前消息按钮区，按需显示 `Prev`/`Next`
+3. 编辑当前消息按钮区，按需显示顶部 `↑ 𝐏𝐫𝐞𝐯` 和底部 `↓ 𝐍𝐞𝐱𝐭`
 
 可采用 bot.editMessageReplyMarkup 更新按钮
 
@@ -299,9 +302,10 @@ User clicks → opens Web App UI
 
 {  
   "inline_keyboard": [  
+    [ { "text": "↑ 𝐏𝐫𝐞𝐯", "callback_data": "page_sessions_0" } ],  
     [ { "text": "写影视剧推荐", "callback_data": "open_s_uuid1" } ],  
     [ { "text": "学习总结", "callback_data": "open_s_uuid2" } ],  
-    [ { "text": "Prev", "callback_data": "page_sessions_0" }, { "text": "Next", "callback_data": "page_sessions_12" } ],  
+    [ { "text": "↓ 𝐍𝐞𝐱𝐭", "callback_data": "page_sessions_12" } ],  
     [ { "text": "打开完整列表", "web_app": { "url": "https://yourdomain.com/sessions?userId=xxx" } } ]  
   ]  
 }  

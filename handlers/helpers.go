@@ -14,6 +14,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	prevPageButtonText = "↑ 𝐏𝐫𝐞𝐯"
+	nextPageButtonText = "↓ 𝐍𝐞𝐱𝐭"
+)
+
 // formatTimeAgo converts a timestamp to relative time string
 func formatTimeAgo(t time.Time) string {
 	duration := time.Since(t)
@@ -48,6 +53,20 @@ func truncate(s string, maxLen int) string {
 func buildSessionKeyboard(sessions []*session.Session, offset int, hasPrev bool, hasNext bool, sessionsPerPage int) *models.InlineKeyboardMarkup {
 	var rows [][]models.InlineKeyboardButton
 
+	// Put previous-page navigation at the top.
+	if hasPrev {
+		prevOffset := offset - sessionsPerPage
+		if prevOffset < 0 {
+			prevOffset = 0
+		}
+		rows = append(rows, []models.InlineKeyboardButton{
+			{
+				Text:         prevPageButtonText,
+				CallbackData: fmt.Sprintf("page_sessions_%d", prevOffset),
+			},
+		})
+	}
+
 	// Add session buttons (one per row)
 	for _, s := range sessions {
 		button := models.InlineKeyboardButton{
@@ -57,29 +76,14 @@ func buildSessionKeyboard(sessions []*session.Session, offset int, hasPrev bool,
 		rows = append(rows, []models.InlineKeyboardButton{button})
 	}
 
-	// Add pagination row when there is previous/next page.
-	if hasPrev || hasNext {
-		var navRow []models.InlineKeyboardButton
-
-		if hasPrev {
-			prevOffset := offset - sessionsPerPage
-			if prevOffset < 0 {
-				prevOffset = 0
-			}
-			navRow = append(navRow, models.InlineKeyboardButton{
-				Text:         "Prev",
-				CallbackData: fmt.Sprintf("page_sessions_%d", prevOffset),
-			})
-		}
-
-		if hasNext {
-			navRow = append(navRow, models.InlineKeyboardButton{
-				Text:         "Next",
+	// Put next-page navigation at the bottom.
+	if hasNext {
+		rows = append(rows, []models.InlineKeyboardButton{
+			{
+				Text:         nextPageButtonText,
 				CallbackData: fmt.Sprintf("page_sessions_%d", offset+sessionsPerPage),
-			})
-		}
-
-		rows = append(rows, navRow)
+			},
+		})
 	}
 
 	return &models.InlineKeyboardMarkup{
